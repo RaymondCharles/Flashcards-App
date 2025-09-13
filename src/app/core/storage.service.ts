@@ -1,41 +1,150 @@
 import { Injectable, signal } from '@angular/core';
 import { get, set } from 'idb-keyval';
-import { Deck, Card } from './models';
+import type { Deck, Card, ReviewLog, Grade } from './models';
+import { scheduleNext } from './scheduler';
 
-const K = { DECKS: 'decks', CARDS: 'cards' };
+const K = { DECKS: 'decks', CARDS: 'cards', LOGS: 'logs' };
+const DAY = 24 * 60 * 60 * 1000;
+
+// ---------- helpers ----------
+function startOfDay(ts: number) { const d = new Date(ts); d.setHours(0, 0, 0, 0); return d.getTime(); }
+function shuffle<T>(a: T[]): T[] { return a.map(v => [Math.random(), v] as const).sort((x, y) => x[0] - y[0]).map(x => x[1]); }
+
+function makeCard(deckId: string, front: string, back: string, now = Date.now()): Card {
+  return {
+    id: crypto.randomUUID(),
+    deckId,
+    front,
+    back,
+    interval: 0,
+    repetitions: 0,
+    ef: 2.5,
+    due: now,
+    createdAt: now,
+    updatedAt: now,
+  };
+}
+function ensureScheduleFields(c: any, now: number): Card {
+  return {
+    id: c.id,
+    deckId: c.deckId,
+    front: c.front,
+    back: c.back,
+    interval: c.interval ?? 0,
+    repetitions: c.repetitions ?? 0,
+    ef: c.ef ?? 2.5,
+    due: c.due ?? now,
+    createdAt: c.createdAt ?? now,
+    updatedAt: c.updatedAt ?? now,
+  };
+}
 
 @Injectable({ providedIn: 'root' })
 export class StorageService {
   decks = signal<Deck[]>([]);
   cards = signal<Card[]>([]);
+  logs  = signal<ReviewLog[]>([]);
 
+  // ---------- init & persistence ----------
   async init() {
     const decks = (await get<Deck[]>(K.DECKS)) ?? [];
-    const cards = (await get<Card[]>(K.CARDS)) ?? [];
+    let cards   = (await get<Card[]>(K.CARDS)) ?? [];
+    const logs  = (await get<ReviewLog[]>(K.LOGS)) ?? [];
 
-    // seed if empty
     if (decks.length === 0) {
       const now = Date.now();
       const deck: Deck = { id: 'seed-deck', name: 'Sample Deck', createdAt: now, updatedAt: now };
       const seedCards: Card[] = [
-        { id: crypto.randomUUID(), deckId: deck.id, front: 'What is Angular?', back: 'A frontend framework.', createdAt: now, updatedAt: now },
-        { id: crypto.randomUUID(), deckId: deck.id, front: 'What is a Component?', back: 'A view + logic unit.', createdAt: now, updatedAt: now },
+        makeCard(deck.id, 'What is Angular?', 'A frontend framework.', now),
+        makeCard(deck.id, 'What is a Component?', 'A view + logic unit.', now),
       ];
       this.decks.set([deck]);
       this.cards.set(seedCards);
-      await set(K.DECKS, this.decks());
-      await set(K.CARDS, this.cards());
-    } else {
-      this.decks.set(decks);
-      this.cards.set(cards);
+      this.logs.set([]);
+      await this.saveAll();
+      return;
     }
+
+    const now = Date.now();
+    cards = cards.map(c => ensureScheduleFields(c, now));
+
+    this.decks.set(decks);
+    this.cards.set(cards);
+    this.logs.set(logs);
+    await this.saveAll();
   }
 
+  private async saveAll() {
+    await Promise.all([
+      set(K.DECKS, this.decks()),
+      set(K.CARDS, this.cards()),
+      set(K.LOGS,  this.logs()),
+    ]);
+  }
+
+  // ---------- decks ----------
   async createDeck(name: string) {
     const now = Date.now();
     const d: Deck = { id: crypto.randomUUID(), name, createdAt: now, updatedAt: now };
     this.decks.update(arr => [...arr, d]);
-    await set(K.DECKS, this.decks());
+    await this.saveAll();
     return d.id;
+  }
+
+  async deleteDeck(deckId: string) {
+    this.decks.update(arr => arr.filter(d => d.id !== deckId));
+    this.cards.update(arr => arr.filter(c => c.deckId !== deckId));
+    this.logs.update(arr => arr.filter(l => l.deckId !== deckId));
+    await this.saveAll();
+  }
+
+  // ---------- cards ----------
+  cardsByDeck(deckId: string) {
+    return this.cards().filter(c => c.deckId === deckId);
+  }
+
+  async addCard(deckId: string, front: string, back: string) {
+    const now = Date.now();
+    const c = makeCard(deckId, front, back, now);
+    this.cards.update(arr => [...arr, c]);
+    await this.saveAll();
+  }
+
+  async updateCard(card: Card) {
+    this.cards.update(arr => arr.map(c => (c.id === card.id ? card : c)));
+    await this.saveAll();
+  }
+
+  async deleteCard(cardId: string) {
+    this.cards.update(arr => arr.filter(c => c.id !== cardId));
+    this.logs.update(arr => arr.filter(l => l.cardId !== cardId));
+    await this.saveAll();
+  }
+
+  // ---------- reviews ----------
+  dueCards(deckId: string, now = Date.now()) {
+    const all = this.cardsByDeck(deckId);
+    const due = all.filter(c => c.due <= now);
+    const newOnes = all.filter(c => c.repetitions === 0);
+    return due.length ? shuffle(due) : shuffle(newOnes).slice(0, 10);
+  }
+
+  async review(card: Card, grade: Grade, timeMs = 0) {
+    const next = scheduleNext(card, grade);
+    this.cards.update(arr => arr.map(c => (c.id === card.id ? next : c)));
+    this.logs.update(a => [
+      ...a,
+      {
+        id: crypto.randomUUID(),
+        cardId: card.id,
+        deckId: card.deckId,
+        ts: Date.now(),
+        grade,
+        timeMs,
+        wasDue: card.due <= Date.now(),
+      },
+    ]);
+    await this.saveAll();
+    return next;
   }
 }

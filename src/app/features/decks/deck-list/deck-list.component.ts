@@ -12,9 +12,16 @@ import { StorageService } from '../../../core/storage.service';
 
     <button (click)="addDeck()">+ New Deck</button>
 
-    <ul *ngIf="storage.decks().length; else empty">
+    <ul *ngIf="storage.decks().length; else empty" style="margin-top:.75rem">
       <li *ngFor="let d of storage.decks()">
         <a [routerLink]="['/decks', d.id]">{{ d.name }}</a>
+        <button
+          (click)="del(d.id)"
+          style="margin-left:.5rem"
+          aria-label="Delete deck"
+        >
+          Delete
+        </button>
       </li>
     </ul>
 
@@ -30,5 +37,11 @@ export class DeckListComponent {
     const name = prompt('Deck name?');
     if (!name) return;
     await this.storage.createDeck(name);
+  }
+
+  async del(id: string) {
+    const ok = confirm('Delete this deck and ALL its cards & logs?');
+    if (!ok) return;
+    await this.storage.deleteDeck(id);
   }
 }

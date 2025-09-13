@@ -121,6 +121,43 @@ export class StorageService {
     await this.saveAll();
   }
 
+  async addCardsBulk(deckId: string, items: { front: string; back: string }[]) {
+    const now = Date.now();
+    const newCards = items.map(it => ({
+      id: crypto.randomUUID(),
+      deckId,
+      front: (it.front ?? '').trim(),
+      back: (it.back ?? '').trim(),
+      interval: 0,
+      repetitions: 0,
+      ef: 2.5,
+      due: now,
+      createdAt: now,
+      updatedAt: now,
+    }));
+    this.cards.update(arr => [...arr, ...newCards]);
+    await this.saveAll();
+  }
+
+  async replaceDeckCards(deckId: string, items: { front: string; back: string }[]) {
+    const now = Date.now();
+    const newCards = items.map(it => ({
+      id: crypto.randomUUID(),
+      deckId,
+      front: (it.front ?? '').trim(),
+      back: (it.back ?? '').trim(),
+      interval: 0,
+      repetitions: 0,
+      ef: 2.5,
+      due: now,
+      createdAt: now,
+      updatedAt: now,
+    }));
+    this.cards.update(arr => [...arr.filter(c => c.deckId !== deckId), ...newCards]);
+    await this.saveAll();
+  }
+
+
   // ---------- reviews ----------
   dueCards(deckId: string, now = Date.now()) {
     const all = this.cardsByDeck(deckId);

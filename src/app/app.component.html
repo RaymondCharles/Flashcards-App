@@ -1,11 +1,20 @@
-<nav style="display:flex; gap:1rem; padding:1rem; border-bottom:1px solid #ddd">
-  <a routerLink="">Dashboard</a>
-  <a routerLink="decks">Decks</a>
-  <a routerLink="stats">Stats</a>
-  <!-- Example direct link to study route (deckId 123) -->
-  <a routerLink="study/123">Study (demo)</a>
+<!-- Top nav -->
+<nav class="border-b bg-white/70 backdrop-blur sticky top-0 z-30">
+  <div class="max-w-5xl mx-auto h-12 px-4 flex items-center gap-4">
+    <a routerLink="/" class="font-semibold text-slate-900 no-underline">SRS Cards</a>
+    <a routerLink="/" class="btn-ghost">Dashboard</a>
+    <a routerLink="/decks" class="btn-ghost">Decks</a>
+    <a routerLink="/stats" class="btn-ghost">Stats</a>
+    <a routerLink="/study/seed-deck" class="btn-ghost">Study (demo)</a>
+    <div class="ml-auto text-xs text-slate-500">Installable PWA ✓</div>
+  </div>
 </nav>
 
-<main style="padding:1rem">
-  <router-outlet></router-outlet>
+<!-- Page container -->
+<main class="container-page">
+  <router-outlet />
 </main>
+
+<footer class="max-w-5xl mx-auto px-4 py-10 text-center text-xs text-slate-500">
+  Built with Angular + Tailwind. Local-only data (IndexedDB).
+</footer>

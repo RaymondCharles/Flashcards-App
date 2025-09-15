@@ -1,1 +1,16 @@
-/* You can add global styles to this file, and also import other style files */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html, body { @apply h-full bg-white text-slate-800; }
+  a { @apply text-indigo-600 hover:text-indigo-700 underline; }
+}
+
+@layer components {
+  .container-page { @apply max-w-5xl mx-auto px-4 py-6; }
+  .card { @apply border border-slate-200 rounded-xl p-4 shadow-sm bg-white; }
+  .btn { @apply inline-flex items-center gap-1 rounded-lg bg-indigo-600 text-white px-3 py-1.5 text-sm hover:bg-indigo-700 disabled:opacity-50; }
+  .btn-ghost { @apply inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100; }
+  .badge { @apply inline-block text-xs rounded-full bg-slate-100 text-slate-700 px-2 py-0.5; }
+}

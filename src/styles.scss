@@ -2,15 +2,91 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ---------- Base (page-level) ---------- */
 @layer base {
-  html, body { @apply h-full bg-white text-slate-800; }
-  a { @apply text-indigo-600 hover:text-indigo-700 underline; }
+  html,
+  body {
+    @apply min-h-screen;
+  }
+
+  /* Page background + default text color */
+  body {
+    @apply bg-slate-50 text-slate-800 dark:bg-slate-950 dark:text-slate-100;
+  }
+
+  /* Links */
+  a {
+    @apply underline decoration-transparent text-indigo-600 hover:decoration-inherit
+           dark:text-indigo-400;
+  }
 }
 
+/* ---------- App primitives (consistent spacing/rounded/etc.) ---------- */
 @layer components {
-  .container-page { @apply max-w-5xl mx-auto px-4 py-6; }
-  .card { @apply border border-slate-200 rounded-xl p-4 shadow-sm bg-white; }
-  .btn { @apply inline-flex items-center gap-1 rounded-lg bg-indigo-600 text-white px-3 py-1.5 text-sm hover:bg-indigo-700 disabled:opacity-50; }
-  .btn-ghost { @apply inline-flex items-center gap-1 rounded-lg px-3 py-1.5 text-sm text-slate-700 hover:bg-slate-100; }
-  .badge { @apply inline-block text-xs rounded-full bg-slate-100 text-slate-700 px-2 py-0.5; }
+  /* App container */
+  .container-app {
+    @apply mx-auto max-w-6xl px-4 sm:px-6 lg:px-8;
+  }
+
+  /* Cards across the app */
+  .card {
+    @apply rounded-2xl border border-slate-200 bg-white shadow-sm p-6
+           dark:border-slate-700 dark:bg-slate-800;
+  }
+
+  /* Buttons */
+  .btn {
+    @apply inline-flex items-center gap-2 rounded-xl bg-indigo-600 px-4 py-2 text-white
+           shadow-sm transition hover:bg-indigo-700 active:scale-[.98]
+           disabled:opacity-50 disabled:pointer-events-none;
+  }
+
+  .btn-ghost {
+    @apply inline-flex items-center gap-2 rounded-xl px-3 py-2 text-sm
+           text-slate-700 hover:bg-slate-100
+           dark:text-slate-200 dark:hover:bg-slate-700/60;
+  }
+
+  .badge {
+    @apply inline-block rounded-full bg-slate-100 px-2.5 py-0.5 text-xs text-slate-700
+           dark:bg-slate-700 dark:text-slate-300;
+  }
+
+  /* Progress bars used in study + stats */
+  .progress-track {
+    @apply h-2 w-full rounded-full bg-slate-200 dark:bg-slate-700;
+  }
+  .progress-fill {
+    @apply h-2 rounded-full bg-indigo-600 dark:bg-indigo-500;
+  }
+
+  /* Nice page section wrapper */
+  .surface {
+    @apply rounded-2xl border border-slate-200 bg-white/80 p-6 shadow-sm
+           dark:border-slate-700 dark:bg-slate-800/80;
+  }
+
+  /* Top nav */
+  .nav {
+    @apply sticky top-0 z-30 border-b border-slate-200 bg-white/70 backdrop-blur
+           dark:border-slate-800 dark:bg-slate-900/70;
+  }
+  .nav-link {
+    @apply rounded-lg px-3 py-2 text-sm text-slate-600 hover:bg-slate-100
+           dark:text-slate-300 dark:hover:bg-slate-800;
+  }
+  .nav-link-active {
+    @apply text-indigo-700 dark:text-indigo-300;
+  }
+
+    /* --- Study flip card utilities --- */
+  @layer components {
+    .flip { @apply relative; perspective: 900px; }
+    .flip-inner { @apply relative; transform-style: preserve-3d; transition: transform 0.6s ease; min-height: 10rem; }
+    .flip.is-flipped .flip-inner { transform: rotateY(180deg); }
+    .flip-face { @apply relative; backface-visibility: hidden; }
+    .flip-back { transform: rotateY(180deg); position: absolute; inset: 0; }
+
+    .study-card { @apply max-w-3xl; }
+  }
 }

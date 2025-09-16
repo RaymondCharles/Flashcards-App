@@ -1,20 +1,41 @@
-<!-- Top nav -->
-<nav class="border-b bg-white/70 backdrop-blur sticky top-0 z-30">
-  <div class="max-w-5xl mx-auto h-12 px-4 flex items-center gap-4">
-    <a routerLink="/" class="font-semibold text-slate-900 no-underline">SRS Cards</a>
-    <a routerLink="/" class="btn-ghost">Dashboard</a>
-    <a routerLink="/decks" class="btn-ghost">Decks</a>
-    <a routerLink="/stats" class="btn-ghost">Stats</a>
-    <a routerLink="/study/seed-deck" class="btn-ghost">Study (demo)</a>
-    <div class="ml-auto text-xs text-slate-500">Installable PWA ✓</div>
-  </div>
-</nav>
+<header class="nav">
+  <div class="container-app flex h-14 items-center justify-between gap-4">
+    <a routerLink="/" class="flex items-center gap-2 font-semibold">
+      <span
+        class="inline-grid h-7 w-7 place-content-center rounded-lg bg-indigo-600 text-white"
+        >S</span
+      >
+      <span>SrsCards</span>
+    </a>
 
-<!-- Page container -->
-<main class="container-page">
-  <router-outlet />
+    <nav class="hidden items-center gap-1 sm:flex">
+      <a routerLink="/" routerLinkActive="nav-link-active" class="nav-link"
+        >Dashboard</a
+      >
+      <a routerLink="/decks" routerLinkActive="nav-link-active" class="nav-link"
+        >Decks</a
+      >
+      <a routerLink="/stats" routerLinkActive="nav-link-active" class="nav-link"
+        >Stats</a
+      >
+      <a
+        routerLink="/study/seed-deck"
+        routerLinkActive="nav-link-active"
+        class="nav-link"
+        >Study (demo)</a
+      >
+    </nav>
+
+    <button class="btn-ghost" (click)="toggleTheme()" title="Toggle theme">
+      <span class="i">🌗</span>
+    </button>
+  </div>
+</header>
+
+<main class="container-app my-6 min-h-[calc(100vh-3.5rem-3rem)]">
+  <router-outlet></router-outlet>
 </main>
 
-<footer class="max-w-5xl mx-auto px-4 py-10 text-center text-xs text-slate-500">
-  Built with Angular + Tailwind. Local-only data (IndexedDB).
+<footer class="container-app my-8 text-center text-xs text-slate-500">
+  Built with Angular · Tailwind · SRS
 </footer>

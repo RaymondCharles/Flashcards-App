@@ -1,87 +1,102 @@
 // src/app/features/study.component.ts
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, HostListener, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
 import { CommonModule } from '@angular/common';
 import { StorageService, Card } from '../core/storage.service';
 
 type Grade = 1 | 2 | 3 | 5;
+const isGrade = (n: number): n is Grade => n === 1 || n === 2 || n === 3 || n === 5;
 
 @Component({
   selector: 'app-study',
   standalone: true,
   imports: [CommonModule, RouterLink],
   template: `
-    <a routerLink="/decks" class="text-indigo-600">&larr; Back to Decks</a>
-    <div class="text-sm text-slate-500 mt-2">Deck: <span class="badge">{{ id }}</span></div>
+  <a class="btn-ghost mb-3 inline-flex items-center gap-2" [routerLink]="['/decks', id]">← Back to Decks</a>
+  <div class="mb-2 text-sm">
+    Deck: <span class="badge">{{ id }}</span>
+  </div>
 
-    <section *ngIf="!showRecap()" class="container-page">
-      <div class="card">
-        <div class="text-xs text-slate-500 mb-2">
+  <!-- Recap -->
+  <section *ngIf="showRecap()" class="card max-w-2xl">
+    <h2 class="mb-3 text-xl font-semibold">Session recap</h2>
+    <div class="mb-2 text-sm">
+      Reviewed {{ reviewed() }} · Correct {{ correct() }} · Incorrect {{ reviewed() - correct() }} ·
+      Accuracy {{ accuracy() }}% · Avg time {{ avgTime() }}s
+    </div>
+
+    <table class="mb-4 w-40 text-sm">
+      <thead class="text-slate-500 dark:text-slate-400">
+        <tr><th class="px-2 py-1 text-left">Grade</th><th class="px-2 py-1 text-left">Count</th></tr>
+      </thead>
+      <tbody>
+        <tr *ngFor="let g of grades">
+          <td class="px-2 py-1">{{ g }}</td>
+          <td class="px-2 py-1 border">{{ countFor(g) }}</td>
+        </tr>
+      </tbody>
+    </table>
+
+    <div class="flex flex-wrap gap-3">
+      <button class="btn" (click)="studyMore()">Study more (new queue)</button>
+      <a class="btn-ghost" routerLink="/stats">Open Stats</a>
+      <a class="btn-ghost" [routerLink]="['/decks', id]">Back to deck</a>
+    </div>
+  </section>
+
+  <!-- Study -->
+  <section *ngIf="!showRecap()" class="study-wrap">
+    <div class="card study-card">
+
+      <!-- progress -->
+      <div class="mb-4">
+        <div class="mb-2 text-sm text-slate-500 dark:text-slate-400">
           Remaining: {{ remaining() }} · Time on card: {{ elapsed() }}s
         </div>
-        <div class="w-full h-2 bg-slate-200 rounded">
-          <div class="h-2 bg-indigo-300 rounded" [style.width.%]="progressPct()"></div>
-        </div>
-
-        <ng-container *ngIf="!revealed(); else backTpl">
-          <div class="mt-4" *ngIf="card() as c">
-            <div class="font-semibold text-slate-700 mb-2">Front</div>
-            <div class="text-lg">{{ c.front }}</div>
-          </div>
-          <button class="btn mt-4" (click)="reveal()" accesskey=" ">
-            Reveal (Space)
-          </button>
-        </ng-container>
-
-        <ng-template #backTpl>
-          <div class="mt-4" *ngIf="card() as c">
-            <div class="font-semibold text-slate-700 mb-2">Back</div>
-            <div class="text-lg mb-3">{{ c.back }}</div>
-          </div>
-
-          <div class="flex flex-wrap items-center gap-2">
-            <button class="btn-ghost" [disabled]="!canUndo()" (click)="undo()">Undo (Z)</button>
-            <button class="btn" (click)="grade(1)">Again (1)</button>
-            <button class="btn" (click)="grade(2)">Hard (2)</button>
-            <button class="btn" (click)="grade(3)">Good (3)</button>
-            <button class="btn" (click)="grade(5)">Easy (5)</button>
-          </div>
-        </ng-template>
-      </div>
-    </section>
-
-    <section *ngIf="showRecap()" class="container-page">
-      <div class="card max-w-xl">
-        <h3 class="font-semibold mb-2">Session recap</h3>
-        <div class="text-sm text-slate-600 mb-3">
-          Reviewed {{ reviewed() }} | Correct {{ correct() }} | Incorrect {{ incorrect() }} |
-          Accuracy {{ accuracy() }}% | Avg time {{ avgTime() }}s
-        </div>
-        <table class="text-sm border">
-          <thead class="bg-slate-50">
-            <tr><th class="px-2 py-1 border">Grade</th><th class="px-2 py-1 border">Count</th></tr>
-          </thead>
-          <tbody>
-            <tr *ngFor="let g of [1,2,3,5]">
-              <td class="px-2 py-1 border">{{ g }}</td>
-              <td class="px-2 py-1 border">{{ gradeCounts()[g] || 0 }}</td>
-            </tr>
-          </tbody>
-        </table>
-
-        <div class="mt-3 flex gap-3">
-          <button class="btn" (click)="studyMore()">Study more (new queue)</button>
-          <a class="btn-ghost" routerLink="/stats">Open Stats</a>
-          <a class="btn-ghost" [routerLink]="['/decks', id]">Back to deck</a>
+        <div class="progress-track">
+          <div class="progress-fill" [style.width.%]="barPct(remaining())"></div>
         </div>
       </div>
-    </section>
-  `,
+
+      <!-- flip card -->
+      <div class="flip" [class.is-flipped]="revealed()">
+        <div class="flip-inner">
+          <!-- front -->
+          <div class="flip-face">
+            <div class="text-[11px] font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Front</div>
+            <div class="text-2xl leading-relaxed mt-2">{{ card().front }}</div>
+
+            <div class="pt-4">
+              <button class="btn" (click)="reveal()">Reveal (Space)</button>
+            </div>
+          </div>
+
+          <!-- back -->
+          <div class="flip-face flip-back">
+            <div class="text-[11px] font-medium uppercase tracking-wide text-slate-500 dark:text-slate-400">Back</div>
+            <div class="text-2xl leading-relaxed mt-2 mb-3">{{ card().back }}</div>
+
+            <div class="flex flex-wrap gap-2">
+              <button class="btn-ghost" [disabled]="!canUndo()" (click)="undo()">Undo (Z)</button>
+              <button class="btn bg-slate-600 hover:bg-slate-700" (click)="grade(1)">Again (1)</button>
+              <button class="btn bg-amber-600 hover:bg-amber-700" (click)="grade(2)">Hard (2)</button>
+              <button class="btn bg-emerald-600 hover:bg-emerald-700" (click)="grade(3)">Good (3)</button>
+              <button class="btn bg-indigo-600 hover:bg-indigo-700" (click)="grade(5)">Easy (5)</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+    </div>
+  </section>
+  `
 })
 export class StudyComponent {
   private route = inject(ActivatedRoute);
   storage = inject(StorageService);
   id = this.route.snapshot.paramMap.get('id')!;
+
+  grades = [1, 2, 3, 5]; // used by template
 
   private all = signal<Card[]>([]);
   private idx = signal(0);
@@ -113,26 +128,23 @@ export class StudyComponent {
   showRecap = computed(() => !this.card());
 
   reviewed = signal(0);
-  correct = signal(0);
+  correct  = signal(0);
   incorrect = signal(0);
   totalTimeMs = signal(0);
   gradeCounts = signal<Record<number, number>>({ 1: 0, 2: 0, 3: 0, 5: 0 });
-
-  progressPct = computed(() => {
-    const total = this.all().length || 1;
-    return Math.round((this.idx() / total) * 100);
-  });
 
   accuracy = computed(() => this.reviewed() ? Math.round((this.correct() / this.reviewed()) * 100) : 0);
   avgTime  = computed(() => this.reviewed() ? Math.round(this.totalTimeMs() / this.reviewed() / 1000) : 0);
 
   reveal() { this.showBack.set(true); }
 
-  grade(g: Grade) {
+  // Accept number from templates/keyboard, narrow to Grade
+  grade(g: number) {
+    if (!isGrade(g)) return;
     const c = this.card();
     if (!c) return;
-    const ms = this.elapsed() * 1000;
 
+    const ms = this.elapsed() * 1000;
     this.storage.applyReview(c, g);
     this.storage.logReview(this.id, c.id, g, ms);
 
@@ -171,4 +183,42 @@ export class StudyComponent {
   private stopTimer() { if (this.tId) clearInterval(this.tId); this.tId = null; }
   private restartTimer() { this.stopTimer(); this.elapsed.set(0); this.startTimer(); }
   private nextCard() { this.idx.update(i => i + 1); this.showBack.set(false); this.restartTimer(); }
+
+  // % filled for the progress bar
+  barPct(n: number) {
+    const total = Math.max(1, n + this.reviewed());
+    return Math.round(((total - n) / total) * 100);
+  }
+
+  // Count for grade table (accept number to avoid template casting)
+  countFor(g: number): number {
+    const m = this.gradeCounts();
+    return m[g] ?? 0;
+  }
+
+  // Keyboard shortcuts
+  @HostListener('window:keydown', ['$event'])
+  onKey(e: KeyboardEvent) {
+    // Space to reveal
+    if (e.key === ' ' && !this.revealed()) {
+      e.preventDefault();
+      this.reveal();
+      return;
+    }
+    if (!this.revealed()) return;
+
+    // Z to undo
+    if (e.key.toLowerCase() === 'z') {
+      e.preventDefault();
+      this.undo();
+      return;
+    }
+
+    // 1/2/3/5 to grade
+    const g = Number(e.key);
+    if (isGrade(g)) {
+      e.preventDefault();
+      this.grade(g);
+    }
+  }
 }

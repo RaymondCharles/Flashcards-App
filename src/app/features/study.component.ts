@@ -1,208 +1,174 @@
-import { Component, computed, effect, inject, signal } from '@angular/core';
-import { CommonModule } from '@angular/common';
+// src/app/features/study.component.ts
+import { Component, computed, inject, signal } from '@angular/core';
 import { ActivatedRoute, RouterLink } from '@angular/router';
-import { StorageService } from '../core/storage.service';
-import type { Card, Grade } from '../core/models';
-import * as scheduler from '../core/scheduler';
+import { CommonModule } from '@angular/common';
+import { StorageService, Card } from '../core/storage.service';
 
-type Action = { cardBefore: Card; cardAfter: Card; grade: Grade; timeMs: number };
+type Grade = 1 | 2 | 3 | 5;
 
 @Component({
   selector: 'app-study',
   standalone: true,
   imports: [CommonModule, RouterLink],
   template: `
-    <a routerLink="/decks" class="text-sm text-indigo-700 hover:underline">← Back to Decks</a>
-    <div class="text-slate-500 mb-3">Deck: <span class="badge">{{ id }}</span></div>
+    <a routerLink="/decks" class="text-indigo-600">&larr; Back to Decks</a>
+    <div class="text-sm text-slate-500 mt-2">Deck: <span class="badge">{{ id }}</span></div>
 
-    <!-- Recap -->
-    <section *ngIf="showRecap()" class="card max-w-3xl">
-      <h2 class="text-xl font-semibold mb-2">Session recap</h2>
-      <div class="text-sm mb-3">
-        Reviewed {{ reviewed() }} | Correct {{ correct() }} | Incorrect {{ reviewed() - correct() }} |
-        Accuracy {{ accuracy() }}% | Avg time {{ avgTime() }}s
-      </div>
+    <section *ngIf="!showRecap()" class="container-page">
+      <div class="card">
+        <div class="text-xs text-slate-500 mb-2">
+          Remaining: {{ remaining() }} · Time on card: {{ elapsed() }}s
+        </div>
+        <div class="w-full h-2 bg-slate-200 rounded">
+          <div class="h-2 bg-indigo-300 rounded" [style.width.%]="progressPct()"></div>
+        </div>
 
-      <table class="text-sm border w-fit">
-        <thead><tr><th class="px-2 py-1 border">Grade</th><th class="px-2 py-1 border">Count</th></tr></thead>
-        <tbody>
-          <tr *ngFor="let g of [1,2,3,5]">
-            <td class="px-2 py-1 border">{{ g }}</td>
-            <td class="px-2 py-1 border">{{ gradeCounts()[g] ?? 0 }}</td>
-          </tr>
-        </tbody>
-      </table>
+        <ng-container *ngIf="!revealed(); else backTpl">
+          <div class="mt-4" *ngIf="card() as c">
+            <div class="font-semibold text-slate-700 mb-2">Front</div>
+            <div class="text-lg">{{ c.front }}</div>
+          </div>
+          <button class="btn mt-4" (click)="reveal()" accesskey=" ">
+            Reveal (Space)
+          </button>
+        </ng-container>
 
-      <div class="mt-4 flex gap-3">
-        <button class="btn" (click)="studyMore()">Study more (new queue)</button>
-        <a class="btn-ghost" [routerLink]="['/stats']">Open Stats</a>
-        <a class="btn-ghost" [routerLink]="['/decks', id]">Back to deck</a>
+        <ng-template #backTpl>
+          <div class="mt-4" *ngIf="card() as c">
+            <div class="font-semibold text-slate-700 mb-2">Back</div>
+            <div class="text-lg mb-3">{{ c.back }}</div>
+          </div>
+
+          <div class="flex flex-wrap items-center gap-2">
+            <button class="btn-ghost" [disabled]="!canUndo()" (click)="undo()">Undo (Z)</button>
+            <button class="btn" (click)="grade(1)">Again (1)</button>
+            <button class="btn" (click)="grade(2)">Hard (2)</button>
+            <button class="btn" (click)="grade(3)">Good (3)</button>
+            <button class="btn" (click)="grade(5)">Easy (5)</button>
+          </div>
+        </ng-template>
       </div>
     </section>
 
-    <!-- Active Study -->
-    <section *ngIf="!showRecap()" class="card max-w-3xl">
-      <div class="text-sm text-slate-600 mb-2">
-        Remaining: {{ remaining() }} · Time on card: {{ elapsed() }}s
-      </div>
-
-      <div class="w-full bg-slate-200 h-2 rounded mb-4">
-        <div class="h-2 bg-indigo-600 rounded" [style.width.%]="progressPct()"></div>
-      </div>
-
-      <div *ngIf="!revealed(); else backTpl">
-        <div class="font-semibold mb-1">Front</div>
-        <div class="text-lg mb-4">{{ card()?.front }}</div>
-        <button class="btn" (click)="reveal()">Reveal (Space)</button>
-      </div>
-
-      <ng-template #backTpl>
-        <div class="font-semibold mb-1">Back</div>
-        <div class="text-lg mb-3">{{ card()?.back }}</div>
-        <div class="flex gap-2">
-          <button class="btn-ghost" [disabled]="!canUndo()" (click)="undo()">Undo (Z)</button>
-          <button class="btn" (click)="grade(1)">Again (1)</button>
-          <button class="btn" (click)="grade(2)">Hard (2)</button>
-          <button class="btn" (click)="grade(3)">Good (3)</button>
-          <button class="btn" (click)="grade(5)">Easy (5)</button>
+    <section *ngIf="showRecap()" class="container-page">
+      <div class="card max-w-xl">
+        <h3 class="font-semibold mb-2">Session recap</h3>
+        <div class="text-sm text-slate-600 mb-3">
+          Reviewed {{ reviewed() }} | Correct {{ correct() }} | Incorrect {{ incorrect() }} |
+          Accuracy {{ accuracy() }}% | Avg time {{ avgTime() }}s
         </div>
-      </ng-template>
+        <table class="text-sm border">
+          <thead class="bg-slate-50">
+            <tr><th class="px-2 py-1 border">Grade</th><th class="px-2 py-1 border">Count</th></tr>
+          </thead>
+          <tbody>
+            <tr *ngFor="let g of [1,2,3,5]">
+              <td class="px-2 py-1 border">{{ g }}</td>
+              <td class="px-2 py-1 border">{{ gradeCounts()[g] || 0 }}</td>
+            </tr>
+          </tbody>
+        </table>
+
+        <div class="mt-3 flex gap-3">
+          <button class="btn" (click)="studyMore()">Study more (new queue)</button>
+          <a class="btn-ghost" routerLink="/stats">Open Stats</a>
+          <a class="btn-ghost" [routerLink]="['/decks', id]">Back to deck</a>
+        </div>
+      </div>
     </section>
   `,
 })
 export class StudyComponent {
   private route = inject(ActivatedRoute);
-  private storage = inject(StorageService);
-
+  storage = inject(StorageService);
   id = this.route.snapshot.paramMap.get('id')!;
 
-  queue = signal<Card[]>([]);
-  index = signal(0);
-  revealed = signal(false);
+  private all = signal<Card[]>([]);
+  private idx = signal(0);
+  private showBack = signal(false);
 
-  private t0 = signal<number>(Date.now());
+  private lastAnswer: { card: Card; grade: Grade; ms: number } | null = null;
+
+  private tId: any = null;
   elapsed = signal(0);
-  private tick?: any;
+
+  constructor() { this.resetQueue(); }
+
+  private resetQueue() {
+    const now = Date.now();
+    const all = this.storage.cardsByDeck(this.id);
+    const due = all.filter(c => c.due <= now);
+    const fresh = all.filter(c => c.repetitions === 0 && c.due > now);
+    const rest = all.filter(c => !due.includes(c) && !fresh.includes(c));
+    this.all.set([...due, ...fresh, ...rest]);
+    this.idx.set(0);
+    this.showBack.set(false);
+    this.elapsed.set(0);
+    this.startTimer();
+  }
+
+  card = computed(() => this.all()[this.idx()]);
+  remaining = computed(() => Math.max(0, this.all().length - this.idx() - (this.card() ? 1 : 0)));
+  revealed = computed(() => this.showBack());
+  showRecap = computed(() => !this.card());
 
   reviewed = signal(0);
   correct = signal(0);
+  incorrect = signal(0);
   totalTimeMs = signal(0);
-  gradeCounts = signal<Record<number, number>>({});
+  gradeCounts = signal<Record<number, number>>({ 1: 0, 2: 0, 3: 0, 5: 0 });
 
-  history = signal<Action[]>([]);
-
-  constructor() {
-    this.buildQueue();
-    this.startTimer();
-
-    effect(() => {
-      if (this.tick) clearInterval(this.tick);
-      this.tick = setInterval(() => this.elapsed.update(s => s + 1), 1000);
-    });
-
-    window.addEventListener('keydown', this.onKey);
-  }
-
-  ngOnDestroy() {
-    if (this.tick) clearInterval(this.tick);
-    window.removeEventListener('keydown', this.onKey);
-  }
-
-  onKey = (e: KeyboardEvent) => {
-    if (this.showRecap()) return;
-    if (e.key === ' ' && !this.revealed()) { e.preventDefault(); this.reveal(); }
-    if (this.revealed()) {
-      if (e.key === '1') this.grade(1);
-      if (e.key === '2') this.grade(2);
-      if (e.key === '3') this.grade(3);
-      if (e.key.toLowerCase() === 'e' || e.key === '5') this.grade(5);
-      if (e.key.toLowerCase() === 'z') this.undo();
-    }
-  };
-
-  card = computed(() => this.queue()[this.index()] ?? null);
-  remaining = computed(() => Math.max(this.queue().length - this.index(), 0));
-  showRecap = computed(() => !this.card());
-  accuracy = computed(() => {
-    const r = this.reviewed();
-    return r ? Math.round((this.correct() / r) * 100) : 0;
-  });
-  avgTime = computed(() => {
-    const r = this.reviewed();
-    return r ? Math.round(this.totalTimeMs() / r / 1000) : 0;
-  });
   progressPct = computed(() => {
-    const q = this.queue().length;
-    return q ? Math.round((this.index() / q) * 100) : 100;
+    const total = this.all().length || 1;
+    return Math.round((this.idx() / total) * 100);
   });
 
-  private startTimer() { this.t0.set(Date.now()); this.elapsed.set(0); }
-  private stopTimer(): number { const ms = Date.now() - this.t0(); this.elapsed.set(0); return ms; }
+  accuracy = computed(() => this.reviewed() ? Math.round((this.correct() / this.reviewed()) * 100) : 0);
+  avgTime  = computed(() => this.reviewed() ? Math.round(this.totalTimeMs() / this.reviewed() / 1000) : 0);
 
-  private buildQueue() {
-    const svc = this.storage as any;
-    const due = typeof svc.dueCards === 'function' ? svc.dueCards(this.id) : [];
-    const all = typeof svc.cardsByDeck === 'function' ? svc.cardsByDeck(this.id) : [];
-    this.queue.set(due.length ? due : all);
-    this.index.set(0);
-    this.revealed.set(false);
-    this.startTimer();
-  }
+  reveal() { this.showBack.set(true); }
 
-  reveal() { this.revealed.set(true); }
-
-  async grade(g: Grade) {
+  grade(g: Grade) {
     const c = this.card();
     if (!c) return;
+    const ms = this.elapsed() * 1000;
 
-    const before = { ...c };
-    const timeMs = this.stopTimer();
+    this.storage.applyReview(c, g);
+    this.storage.logReview(this.id, c.id, g, ms);
 
-    const after = { ...c };
+    this.reviewed.update(x => x + 1);
+    if (g >= 3) this.correct.update(x => x + 1);
+    else this.incorrect.update(x => x + 1);
+    this.totalTimeMs.update(x => x + ms);
+    this.gradeCounts.update(m => ({ ...m, [g]: (m[g] || 0) + 1 }));
 
-    // Call whichever scheduler function your app actually exports
-    const sched: any = scheduler as any;
-    const fn = sched.grade ?? sched.review ?? sched.rate ?? sched.schedule;
-    if (typeof fn === 'function') {
-      fn(after, g, timeMs);
-    } else {
-      // very naive fallback if no scheduler provided
-      after.repetitions = (after.repetitions ?? 0) + (g >= 3 ? 1 : 0);
-      after.interval = Math.max(1, Math.round((after.interval ?? 0) * (g >= 5 ? 2.5 : g >= 3 ? 1.6 : 0.5)));
-      after.due = Date.now() + after.interval * 24 * 60 * 60 * 1000;
-    }
-
-    await (this.storage as any).updateCard(after);
-
-    this.reviewed.update(n => n + 1);
-    if (g >= 3) this.correct.update(n => n + 1);
-    this.totalTimeMs.update(ms => ms + timeMs);
-    this.gradeCounts.update(m => ({ ...m, [g]: (m[g] ?? 0) + 1 }));
-
-    this.history.update(h => [{ cardBefore: before, cardAfter: after, grade: g, timeMs }, ...h].slice(0, 20));
-
-    this.index.update(i => i + 1);
-    this.revealed.set(false);
-    this.startTimer();
+    this.lastAnswer = { card: c, grade: g, ms };
+    this.nextCard();
   }
 
-  canUndo = computed(() => this.history().length > 0);
-
-  async undo() {
-    const last = this.history()[0];
-    if (!last) return;
-    await (this.storage as any).updateCard(last.cardBefore);
-
-    this.reviewed.update(n => Math.max(0, n - 1));
-    if (last.grade >= 3) this.correct.update(n => Math.max(0, n - 1));
-    this.totalTimeMs.update(ms => Math.max(0, ms - last.timeMs));
-    this.gradeCounts.update(m => ({ ...m, [last.grade]: Math.max(0, (m[last.grade] ?? 1) - 1) }));
-
-    this.index.update(i => Math.max(0, i - 1));
-    this.revealed.set(true);
-    this.history.update(h => h.slice(1));
-    this.startTimer();
+  canUndo() { return !!this.lastAnswer; }
+  undo() {
+    if (!this.lastAnswer) return;
+    const g = this.lastAnswer.grade;
+    this.reviewed.update(x => Math.max(0, x - 1));
+    if (g >= 3) this.correct.update(x => Math.max(0, x - 1));
+    else this.incorrect.update(x => Math.max(0, x - 1));
+    this.totalTimeMs.update(x => Math.max(0, x - this.lastAnswer!.ms));
+    this.gradeCounts.update(m => ({ ...m, [g]: Math.max(0, (m[g] || 1) - 1) }));
+    this.idx.update(i => Math.max(0, i - 1));
+    this.showBack.set(true);
+    this.lastAnswer = null;
+    this.restartTimer();
   }
 
-  studyMore() { this.buildQueue(); }
+  studyMore() { this.resetQueue(); }
+
+  private startTimer() {
+    this.stopTimer();
+    this.elapsed.set(0);
+    this.tId = setInterval(() => this.elapsed.update(s => s + 1), 1000);
+  }
+  private stopTimer() { if (this.tId) clearInterval(this.tId); this.tId = null; }
+  private restartTimer() { this.stopTimer(); this.elapsed.set(0); this.startTimer(); }
+  private nextCard() { this.idx.update(i => i + 1); this.showBack.set(false); this.restartTimer(); }
 }
